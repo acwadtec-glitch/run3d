@@ -16,4 +16,8 @@ fs.mkdirSync(path.join(d, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(d, 'dist/page.html'), fill(tpl, CDN));
 fs.writeFileSync(path.join(d, 'dist/test.html'), head + fill(tpl, CDN) + '</body></html>');
 fs.writeFileSync(path.join(d, 'index.html'), head + fill(tpl, LOCAL) + '</body></html>');
+// static-host output (Vercel/Netlify): public/ = index.html + vendor/
+fs.mkdirSync(path.join(d, 'public/vendor'), { recursive: true });
+fs.copyFileSync(path.join(d, 'index.html'), path.join(d, 'public/index.html'));
+['three.min.js', 'peerjs.min.js'].forEach(f => fs.copyFileSync(path.join(d, 'vendor', f), path.join(d, 'public/vendor', f)));
 console.log('built', (tpl.length / 1024).toFixed(0) + ' KB');
