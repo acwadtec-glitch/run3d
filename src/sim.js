@@ -64,7 +64,16 @@ RS.nearest = function (T, x, z, hint) {
   return { i: bi, off: (x - s.x) * s.nx + (z - s.z) * s.nz };
 };
 
+/* car types: top-speed, acceleration and grip multipliers, plus nitro recharge/drain */
+RS.CARS = [
+  { id: 'gt', power: 1, acc: 1, grip: 1, nUp: 1, nDn: 1 },
+  { id: 'sprint', power: 0.955, acc: 1.1, grip: 1.07, nUp: 1, nDn: 1 },
+  { id: 'titan', power: 1.05, acc: 0.95, grip: 0.95, nUp: 1, nDn: 1 },
+  { id: 'flash', power: 1, acc: 1.03, grip: 1.02, nUp: 1.5, nDn: 0.7 }
+];
+
 RS.newCar = function (T, slot, o) {
+  var ct = RS.CARS[o.car || 0] || RS.CARS[0];
   var row = Math.floor(slot / 2), col = slot % 2;
   var m = 12 + row * 11, back = Math.round(m / T.ds);
   var idx = (T.N - back) % T.N, s = T.S[idx], lat = col === 0 ? 3.4 : -3.4;
@@ -73,7 +82,7 @@ RS.newCar = function (T, slot, o) {
     x: s.x + s.nx * lat, z: s.z + s.nz * lat, h: s.h, vx: 0, vz: 0,
     steer: 0, yaw: 0, slip: 0, hit: 0, roll: 0, wheelRot: 0,
     idx: idx, idxPrev: idx, off: lat, prog: idx - T.N, maxDone: -1,
-    power: o.power || 1, skill: o.skill || 0.9, baseLane: o.baseLane || 0, lane: lat, react: o.react || 0,
+    car: o.car || 0, power: ct.power, accK: ct.acc, gripK: ct.grip, nUp: ct.nUp, nDn: ct.nDn, skill: o.skill || 0.9, baseLane: o.baseLane || 0, lane: lat, react: o.react || 0,
     nitro: 0.6, boosting: false, braking: false,
     lapStart: 0, lapTimes: [], bestLap: Infinity, finished: false, finishT: 0,
     rpm: 0.2, gear: 1, speed: 0, wrongT: 0, stuckT: 0, hitCount: 0, gravelT: 0
@@ -82,7 +91,7 @@ RS.newCar = function (T, slot, o) {
 
 RS.stepCar = function (c, inp, dt, T) {
   var sp0 = c.vx * Math.sin(c.h) + c.vz * Math.cos(c.h);
-  var aMax = 44 + 0.0016 * sp0 * sp0;
+  var gk = c.gripK || 1, aMax = (44 + 0.0016 * sp0 * sp0) * gk;
   var wmax = Math.min(1.7, aMax / Math.max(Math.abs(sp0), 6));
   var rate = 1 - Math.exp(-dt * (Math.abs(inp.steer) < 0.01 ? 9 : 6.5));
   c.steer += (inp.steer - c.steer) * rate;
@@ -99,7 +108,7 @@ RS.stepCar = function (c, inp, dt, T) {
   c.braking = false;
   if (inp.throttle > 0) {
     var r = Math.min(1, Math.max(0, vf / vmax));
-    var acc = vf < 0 ? 26 : 21 * (1 - Math.pow(r, 1.5));
+    var acc = vf < 0 ? 26 : 21 * (c.accK || 1) * (1 - Math.pow(r, 1.5));
     if (boost) acc += 15 * (1 - r);
     vf += acc * inp.throttle * dt;
   } else if (inp.brake > 0) {
@@ -114,14 +123,14 @@ RS.stepCar = function (c, inp, dt, T) {
   else if (curb) vf *= Math.exp(-0.15 * dt);
   if (vf > vmax) vf -= (vf - vmax) * Math.min(1, 2 * dt);
 
-  var grip = inp.hb ? 1.6 : (gravel ? 3.2 : 8.5);
+  var grip = (inp.hb ? 1.6 : (gravel ? 3.2 : 8.5)) * gk;
   c.slip = Math.abs(vl);
   vl *= Math.exp(-grip * dt);
   c.vx = fx * vf + lx * vl; c.vz = fz * vf + lz * vl;
   c.x += c.vx * dt; c.z += c.vz * dt;
 
-  if (boost) c.nitro = Math.max(0, c.nitro - 0.2 * dt);
-  else c.nitro = Math.min(1, c.nitro + (c.slip > 3 && Math.abs(vf) > 18 ? 0.14 : 0.03) * dt);
+  if (boost) c.nitro = Math.max(0, c.nitro - 0.2 * (c.nDn || 1) * dt);
+  else c.nitro = Math.min(1, c.nitro + (c.slip > 3 && Math.abs(vf) > 18 ? 0.14 : 0.03) * (c.nUp || 1) * dt);
   c.boosting = boost;
   c.speed = Math.hypot(c.vx, c.vz);
 
@@ -207,7 +216,7 @@ RS.aiInput = function (c, T, cars, dt, out) {
   var err = RS.wrap(Math.atan2(tx - c.x, tz - c.z) - c.h);
   out.steer = Math.max(-1, Math.min(1, err * 2.6));
   var bi = (c.idx + Math.round((sp * 0.8 + 10) / T.ds)) % N;
-  var vt = Math.min(T.vp[c.idx], T.vp[bi]) * c.skill;
+  var vv = Math.min(T.vp[c.idx], T.vp[bi]), cap = RS.VTOP * 0.97, vt = (vv >= cap - 0.1 ? cap * c.power : vv * Math.sqrt(c.gripK || 1)) * c.skill;
   if (sp < vt - 0.5) { out.throttle = 1; out.brake = 0; }
   else if (sp > vt + 2) { out.throttle = 0; out.brake = Math.min(1, (sp - vt) * 0.12); }
   else { out.throttle = 0.35; out.brake = 0; }

@@ -69,9 +69,16 @@ function freeColor(want) {
 }
 
 /* ---- host side ---- */
-function netCreate(name, color) {
+function freeDrv(want, exceptId) {
+  want = (want | 0) % DRIVERS.length;
+  for (var k = 0; k < DRIVERS.length; k++) { var d = (want + k) % DRIVERS.length; if (NET.players.every(function (p) { return p.id === exceptId || p.drv !== d; })) return d; }
+  return want;
+}
+function drvFree(d, exceptId) { return NET.players.every(function (p) { return p.id === exceptId || p.drv !== d; }); }
+function cleanCar(c) { c = c | 0; return c >= 0 && c < LOOKS.length ? c : 0; }
+function netCreate(name, color, car, drv) {
   netReset(); NET.role = 'host'; NET.code = genCode(); NET.me = 'host';
-  NET.players = [{ id: 'host', name: cleanName(name), color: color }];
+  NET.players = [{ id: 'host', name: cleanName(name), color: color, car: cleanCar(car), drv: (drv | 0) % DRIVERS.length }];
   NET.track = cfg.track; NET.laps = cfg.laps;
   tryHost(hasPeerLib() ? 'peer' : 'bc', 0);
 }
@@ -101,11 +108,14 @@ function hostData(id, m) {
   var p;
   if (m.t === 'hello') {
     if (NET.inRace || NET.players.length >= 6) { NET.tr.send(id, { t: 'busy' }); return; }
-    NET.players.push({ id: id, name: cleanName(m.name), color: freeColor(m.color) });
+    NET.players.push({ id: id, name: cleanName(m.name), color: freeColor(m.color), car: cleanCar(m.car), drv: freeDrv(m.drv) });
     NET.tr.send(id, { t: 'welcome', id: id }); hostBroadcastLobby();
   } else if (m.t === 'color') {
     p = NET.players.filter(function (x) { return x.id === id; })[0];
     if (p && colorFree(m.color, id)) { p.color = m.color; hostBroadcastLobby(); }
+  } else if (m.t === 'pick') {
+    p = NET.players.filter(function (x) { return x.id === id; })[0];
+    if (p) { p.car = cleanCar(m.car); if (drvFree(m.drv | 0, id) && (m.drv | 0) >= 0 && (m.drv | 0) < DRIVERS.length) p.drv = m.drv | 0; hostBroadcastLobby(); }
   } else if (m.t === 's') { NETUI.state(m); NET.tr.broadcast(m, id); }
   else if (m.t === 'leave') hostLeave(id);
 }
@@ -132,24 +142,28 @@ function netSetColor(col) {
   if (NET.role === 'host') { var me = NET.players[0]; if (colorFree(col, 'host')) { me.color = col; hostBroadcastLobby(); } }
   else if (NET.tr) NET.tr.send('host', { t: 'color', color: col });
 }
+function netSetPick(car, drv) {
+  if (NET.role === 'host') { var me = NET.players[0]; me.car = cleanCar(car); if (drvFree(drv, 'host')) me.drv = drv; hostBroadcastLobby(); }
+  else if (NET.tr) NET.tr.send('host', { t: 'pick', car: car, drv: drv });
+}
 function netSetTrackLaps(track, laps) { if (NET.role !== 'host') return; if (track) NET.track = track; if (laps) NET.laps = laps; hostBroadcastLobby(); }
 
 /* ---- guest side ---- */
-function netJoin(code, name, color) {
+function netJoin(code, name, color, car, drv) {
   netReset(); NET.role = 'guest'; NET.code = code;
-  tryJoin(hasPeerLib() ? 'peer' : 'bc', name, color);
+  tryJoin(hasPeerLib() ? 'peer' : 'bc', name, color, car, drv);
 }
-function tryJoin(kind, name, color) {
+function tryJoin(kind, name, color, car, drv) {
   var settled = false, tr = null, tm;
   function fail() {
     if (settled) return; settled = true; clearTimeout(tm); try { tr && tr.close(); } catch (e) { } NET.tr = null;
-    if (kind === 'peer') { NETUI.status('بندوّر على الغرفة...'); tryJoin('bc', name, color); }
+    if (kind === 'peer') { NETUI.status('بندوّر على الغرفة...'); tryJoin('bc', name, color, car, drv); }
     else NETUI.error('الغرفة مش موجودة، راجع الرمز');
   }
   var H = {
     onOpen: function () {
       clearTimeout(tm); NET.tr = tr; NET.kind = kind;
-      tr.send('host', { t: 'hello', name: cleanName(name), color: color });
+      tr.send('host', { t: 'hello', name: cleanName(name), color: color, car: car, drv: drv });
       tm = setTimeout(fail, 3500);
     },
     onPeer: function () { },

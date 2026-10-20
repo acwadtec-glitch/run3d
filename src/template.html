@@ -232,6 +232,36 @@ tr.me td { background: rgba(86, 200, 255, 0.14); font-weight: 700; }
 .phwrong.show { opacity: 1; }
 #app.split #msg { font-size: 36px; }
 @media (max-width: 760px) { .tracks { grid-template-columns: 1fr 1fr; } .tk small { display: none; } .roomcode { font-size: 34px; } .sheet.wide { width: 100%; } }
+/* ---------- tabs, car and driver cards ---------- */
+.sheet { --px: 26px; --pb: 22px; }
+@media (max-width: 760px) { .sheet { --px: 18px; --pb: 16px; } }
+@media (max-height: 520px) { .sheet { --px: 16px; --pb: 12px; } }
+.tabs { display: flex; border: 1px solid var(--line); margin-bottom: 14px; }
+.tabs button { flex: 1; background: transparent; border: 0; padding: 10px 4px; font: 800 15px var(--font-display); color: var(--dim); border-inline-start: 1px solid var(--line); }
+.tabs button:first-child { border-inline-start: 0; }
+.tabs button.sel { background: rgba(86, 200, 255, 0.18); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.cars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cc { text-align: start; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); padding: 10px; display: grid; gap: 3px; min-width: 0; align-content: start; }
+.cc b { font: 800 17px/1.2 var(--font-display); }
+.cc small { color: var(--dim); font-size: 11.5px; line-height: 1.4; min-height: 32px; }
+.cc.sel, .dc.sel { border-color: var(--accent); background: rgba(86, 200, 255, 0.14); box-shadow: inset 0 -2px 0 var(--accent); }
+.st { display: grid; grid-template-columns: 46px 1fr; gap: 6px; align-items: center; font-size: 11px; color: var(--dim); }
+.st i { display: block; height: 5px; background: rgba(255, 255, 255, 0.1); position: relative; }
+.st i::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--accent); }
+.drivers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dc { text-align: center; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); padding: 8px 4px; display: grid; gap: 2px; justify-items: center; min-width: 0; }
+.dc img { width: 56px; height: 56px; display: block; }
+.dc b { font: 800 15px/1.2 var(--font-display); }
+.dc small { color: var(--dim); font-size: 10.5px; line-height: 1.3; }
+.dc.dis { opacity: 0.3; cursor: not-allowed; }
+.dic { width: 22px; height: 22px; vertical-align: middle; margin-inline-end: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); }
+.plist li small { color: var(--dim); font-size: 11px; margin-inline-start: 6px; }
+.stickbar { position: sticky; bottom: 0; margin: 8px calc(var(--px) * -1) calc(var(--pb) * -1); padding: 10px var(--px) var(--pb); background: linear-gradient(180deg, rgba(8, 11, 16, 0), #080b10 22%); z-index: 2; }
+.stickbar .go { margin-top: 0; }
+.sum { text-align: center; font-size: 12.5px; color: var(--dim); margin-bottom: 8px; }
+.opt h3.who, #who1, #who1d { color: var(--gold); }
+td img.dic { margin-inline-end: 6px; }
+@media (max-width: 760px) { .cc small { display: none; } .dc small { display: none; } .dc img { width: 44px; height: 44px; } }
 @media (prefers-reduced-motion: reduce) { #msg, #hint, #wrong { transition: none; } }
 </style>
 
@@ -296,20 +326,35 @@ tr.me td { background: rgba(86, 200, 255, 0.14); font-weight: 700; }
 
     <div class="sheet chamfer wide" id="sSetup" hidden>
       <div class="bar"><button id="bBackS" class="back">&larr; رجوع</button><h2 id="setupTitle">ضد الكمبيوتر</h2></div>
-      <div class="opt"><h3>لون عربيتك <span id="colName"></span></h3><div id="swatches" class="swatches"></div></div>
-      <div id="p2box" hidden>
-        <div class="opt"><h3>اسم اللاعب الثاني</h3><input id="inName2" class="fld" type="text" maxlength="14" autocomplete="off" placeholder="اسم اللاعب الثاني"></div>
-        <div class="opt"><h3>لون اللاعب الثاني</h3><div id="swatches2" class="swatches"></div></div>
+      <div class="tabs" id="tabsS"><button data-t="car" class="sel">العربية</button><button data-t="drv">السائق</button><button data-t="trk">المضمار</button><button data-t="race">السباق</button></div>
+      <div id="pane_car">
+        <div class="opt"><h3 id="who1">اللاعب الأول</h3></div>
+        <div class="opt"><h3>نوع العربية</h3><div id="carBox1" class="cars"></div></div>
+        <div class="opt"><h3>لون عربيتك <span id="colName"></span></h3><div id="swatches" class="swatches"></div></div>
+        <div id="p2box" hidden>
+          <div class="opt"><h3 class="who">اللاعب الثاني</h3><input id="inName2" class="fld" type="text" maxlength="14" autocomplete="off" placeholder="اسم اللاعب الثاني"></div>
+          <div class="opt"><h3>نوع عربية اللاعب الثاني</h3><div id="carBox2" class="cars"></div></div>
+          <div class="opt"><h3>لون اللاعب الثاني</h3><div id="swatches2" class="swatches"></div></div>
+        </div>
       </div>
-      <div class="opt"><h3>المضمار</h3><div id="trackGrid" class="tracks"></div></div>
-      <div class="opt"><h3>عدد اللفات</h3><div class="seg" id="segLaps"><button data-v="1">لفة</button><button data-v="3">٣ لفات</button><button data-v="5">٥ لفات</button></div></div>
-      <div class="opt" id="aiBox" hidden><h3>منافسين الكمبيوتر</h3><div class="seg" id="segAI"><button data-v="0">بدون</button><button data-v="2">٢</button><button data-v="4">٤</button></div></div>
-      <div class="opt" id="diffBox"><h3>مستوى المنافسين</h3><div class="seg" id="segDiff"><button data-v="easy">سهل</button><button data-v="med">متوسط</button><button data-v="hard">صعب</button></div></div>
-      <button id="bStart" class="go">ابدأ السباق</button>
-      <div class="keys" id="keysLocal" hidden>
-        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><div>اللاعب الأول، <kbd>Shift</kbd> نيترو، <kbd>Space</kbd> فرامل يد، <kbd>R</kbd> رجوع للمسار</div>
-        <div><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd></div><div>اللاعب الثاني، <kbd>Shift</kbd> اليمين نيترو، <kbd>Enter</kbd> فرامل يد، <kbd>T</kbd> رجوع للمسار</div>
+      <div id="pane_drv" hidden>
+        <div class="opt"><h3 id="who1d">اللاعب الأول</h3></div>
+        <div class="opt"><h3>اختار السائق</h3><div id="drvBox1" class="drivers"></div></div>
+        <div id="p2drv" hidden><div class="opt"><h3>سائق اللاعب الثاني</h3><div id="drvBox2" class="drivers"></div></div></div>
       </div>
+      <div id="pane_trk" hidden>
+        <div class="opt"><h3>شكل الحلبة</h3><div id="trackGrid" class="tracks"></div></div>
+        <div class="opt"><h3>عدد اللفات</h3><div class="seg" id="segLaps"><button data-v="1">لفة</button><button data-v="3">٣ لفات</button><button data-v="5">٥ لفات</button></div></div>
+      </div>
+      <div id="pane_race" hidden>
+        <div class="opt" id="aiBox" hidden><h3>منافسين الكمبيوتر</h3><div class="seg" id="segAI"><button data-v="0">بدون</button><button data-v="2">٢</button><button data-v="4">٤</button></div></div>
+        <div class="opt" id="diffBox"><h3>مستوى المنافسين</h3><div class="seg" id="segDiff"><button data-v="easy">سهل</button><button data-v="med">متوسط</button><button data-v="hard">صعب</button></div></div>
+        <div class="keys" id="keysLocal" hidden>
+          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><div>اللاعب الأول، <kbd>Shift</kbd> نيترو، <kbd>Space</kbd> فرامل يد، <kbd>R</kbd> رجوع للمسار</div>
+          <div><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd></div><div>اللاعب الثاني، <kbd>Shift</kbd> اليمين نيترو، <kbd>Enter</kbd> فرامل يد، <kbd>T</kbd> رجوع للمسار</div>
+        </div>
+      </div>
+      <div class="stickbar"><div class="sum" id="sumLine"></div><button id="bStart" class="go">ابدأ السباق</button></div>
     </div>
 
     <div class="sheet chamfer" id="sOnline" hidden>
@@ -324,6 +369,8 @@ tr.me td { background: rgba(86, 200, 255, 0.14); font-weight: 700; }
       <div class="roomrow"><div><small>رمز الغرفة</small><div id="roomCode" class="roomcode">-----</div></div><button id="bCopy" class="back">نسخ الرمز</button></div>
       <p id="netNote" class="note" hidden>الإنترنت مش متاح هنا، فالغرفة شغالة بين تابات نفس المتصفح بس. ارفع اللعبة على استضافة عادية عشان اللعب بين الأجهزة.</p>
       <div class="opt"><h3>اللاعبين <span id="pcount">1/6</span></h3><ul id="plist" class="plist"></ul></div>
+      <div class="opt"><h3>نوع العربية</h3><div id="carBoxL" class="cars"></div></div>
+      <div class="opt"><h3>السائق</h3><div id="drvBoxL" class="drivers"></div></div>
       <div class="opt"><h3>لون عربيتك</h3><div id="swatchesL" class="swatches"></div></div>
       <div id="lobbyHost" hidden>
         <div class="opt"><h3>المضمار</h3><div id="trackGridL" class="tracks"></div></div>

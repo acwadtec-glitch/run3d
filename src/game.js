@@ -5,7 +5,7 @@ var AICOLS = [0xc8102e, 0xe8ecf1, 0x1646d8, 0xf0a500, 0x0f9d8a, 0x2a2f36];
 var AINAMES = ['كريم', 'عمر', 'يوسف', 'حسن', 'مازن'], AILANE = [2, -2, 4, -4, 0], AIFAC = [1, 0.985, 0.99, 0.975, 0.97];
 var DIFF = { easy: 0.8, med: 0.89, hard: 0.975 };
 var ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس'];
-var CAR_NUMS = [11, 3, 23, 44, 88, 7];
+var CAR_NUMS = [11, 3, 23, 44, 88, 7], AICAR = [1, 2, 3, 0, 2];
 var IS_TOUCH = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 
 /* ---- saved settings ---- */
@@ -14,9 +14,13 @@ function loadProf() { try { return JSON.parse(localStorage.getItem(STORE)) || {}
 var prof = loadProf();
 var cfg = {
   mode: 'solo', track: prof.track || 'classic', laps: prof.laps || 3, diff: prof.diff || 'med', ai: 5, aiLocal: prof.ai != null ? prof.ai : 2,
-  c1: prof.c1 || 0, c2: prof.c2 != null ? prof.c2 : 1, n1: prof.n1 || '', n2: prof.n2 || ''
+  c1: prof.c1 || 0, c2: prof.c2 != null ? prof.c2 : 1, n1: prof.n1 || '', n2: prof.n2 || '',
+  car1: prof.car1 | 0, car2: prof.car2 != null ? prof.car2 | 0 : 1, d1: prof.d1 | 0, d2: prof.d2 != null ? prof.d2 | 0 : 1
 };
-function saveProf() { try { localStorage.setItem(STORE, JSON.stringify({ n1: cfg.n1, n2: cfg.n2, c1: cfg.c1, c2: cfg.c2, track: cfg.track, laps: cfg.laps, diff: cfg.diff, ai: cfg.aiLocal })); } catch (e) { } }
+['car1', 'car2'].forEach(function (k) { if (!(cfg[k] >= 0 && cfg[k] < RS.CARS.length)) cfg[k] = 0; });
+['d1', 'd2'].forEach(function (k) { if (!(cfg[k] >= 0 && cfg[k] < DRIVERS.length)) cfg[k] = 0; });
+if (cfg.d1 === cfg.d2) cfg.d2 = (cfg.d1 + 1) % DRIVERS.length;
+function saveProf() { try { localStorage.setItem(STORE, JSON.stringify({ n1: cfg.n1, n2: cfg.n2, c1: cfg.c1, c2: cfg.c2, track: cfg.track, laps: cfg.laps, diff: cfg.diff, ai: cfg.aiLocal, car1: cfg.car1, car2: cfg.car2, d1: cfg.d1, d2: cfg.d2 })); } catch (e) { } }
 function loadRecord() { try { var v = parseFloat(localStorage.getItem(REC_KEY)); return isFinite(v) && v > 0 ? v : 0; } catch (e) { return 0; } }
 function saveRecord(t) { try { localStorage.setItem(REC_KEY, String(t)); } catch (e) { } }
 var record = loadRecord();
@@ -65,35 +69,37 @@ function makePlan() {
   var plan = [], i;
   if (cfg.mode === 'online') {
     var list = NET.order.length ? NET.order : NET.players;
-    list.forEach(function (p) { plan.push(p.id === NET.me ? { kind: 'human', local: 0, name: cfg.n1 || p.name, color: p.color, id: p.id } : { kind: 'remote', name: p.name, color: p.color, id: p.id }); });
+    list.forEach(function (p) { plan.push(p.id === NET.me ? { kind: 'human', local: 0, name: cfg.n1 || p.name, color: p.color, id: p.id, car: p.car | 0, drv: p.drv | 0 } : { kind: 'remote', name: p.name, color: p.color, id: p.id, car: p.car | 0, drv: p.drv | 0 }); });
     return plan;
   }
   var n1 = cfg.n1 || 'لاعب 1', n2 = cfg.n2 || 'لاعب 2';
   if (cfg.mode === 'local') {
     for (i = 0; i < cfg.aiLocal; i++) plan.push({ kind: 'ai' });
-    plan.push({ kind: 'human', local: 0, name: n1, color: PCOLORS[cfg.c1] });
-    plan.push({ kind: 'human', local: 1, name: n2, color: PCOLORS[cfg.c2] });
+    plan.push({ kind: 'human', local: 0, name: n1, color: PCOLORS[cfg.c1], car: cfg.car1, drv: cfg.d1 });
+    plan.push({ kind: 'human', local: 1, name: n2, color: PCOLORS[cfg.c2], car: cfg.car2, drv: cfg.d2 });
     return plan;
   }
   for (i = 0; i < 5; i++) plan.push({ kind: 'ai' });
-  plan.splice(4, 0, { kind: 'human', local: 0, name: n1, color: PCOLORS[cfg.c1] });
+  plan.splice(4, 0, { kind: 'human', local: 0, name: n1, color: PCOLORS[cfg.c1], car: cfg.car1, drv: cfg.d1 });
   return plan;
 }
 function setupRace(plan) {
   var base = DIFF[cfg.diff], aiN = 0, taken = plan.filter(function (e) { return e.kind !== 'ai'; }).map(function (e) { return e.color; });
   var aiCols = AICOLS.filter(function (c) { return taken.indexOf(c) < 0; });
+  var takenD = plan.filter(function (e) { return e.kind !== 'ai'; }).map(function (e) { return e.drv; });
+  var aiDrv = DRIVERS.map(function (d, i) { return i; }).filter(function (i) { return takenD.indexOf(i) < 0; });
   cars = []; humans = [];
   plan.forEach(function (e, slot) {
     var c;
     if (e.kind === 'ai') {
-      c = RS.newCar(T, slot, { name: AINAMES[aiN % 5], color: aiCols[aiN % aiCols.length], skill: base * AIFAC[aiN % 5], baseLane: AILANE[aiN % 5] }); aiN++;
+      c = RS.newCar(T, slot, { name: AINAMES[aiN % 5], color: aiCols[aiN % aiCols.length], skill: base * AIFAC[aiN % 5], baseLane: AILANE[aiN % 5], car: AICAR[aiN % 5] }); c.drv = aiDrv[aiN % aiDrv.length]; aiN++;
     } else {
-      c = RS.newCar(T, slot, { name: e.name, isPlayer: e.kind === 'human', color: e.color });
+      c = RS.newCar(T, slot, { name: e.name, isPlayer: e.kind === 'human', color: e.color, car: e.car | 0 }); c.drv = e.drv | 0;
       if (e.kind === 'human') { c.localIdx = e.local; humans[e.local] = c; } else c.remote = true;
       c.netId = e.id;
     }
     c.slot = slot; c.rpm = 0.2; c.hit = 0; cars.push(c);
-    views[slot].setColor(c.color); views[slot].root.visible = true; updateCarView(c, views[slot], 0.0001);
+    views[slot].setColor(c.color); views[slot].setLook(c.car | 0, c.drv | 0); views[slot].root.visible = true; updateCarView(c, views[slot], 0.0001);
   });
   for (var i = plan.length; i < 6; i++) views[i].root.visible = false;
   player = humans[0] || null; state.t = 0; ranking = cars.slice();
@@ -331,7 +337,7 @@ function showResults() {
     el.resSub.textContent = 'الزمن الكلي ' + fmt(me.finishT) + '  ·  أسرع لفة ' + fmt(me.bestLap);
   }
   ranking.forEach(function (c, i) {
-    h += '<tr class="' + (c.localIdx != null ? 'me' : '') + '"><td>' + (i + 1) + '</td><td><i style="background:' + hexc(c) + '"></i>' + c.name + '</td><td>' +
+    h += '<tr class="' + (c.localIdx != null ? 'me' : '') + '"><td>' + (i + 1) + '</td><td><i style="background:' + hexc(c) + '"></i><img class="dic" alt="" src="' + driverIcon(c.drv | 0) + '">' + c.name + '</td><td>' +
       (c.finished ? (i === 0 ? fmt(c.finishT) : '‎+' + (c.finishT - lead.finishT).toFixed(2)) : 'لسه بيسابق') + '</td><td>' + fmt(c.bestLap) + '</td></tr>';
   });
   el.resBody.innerHTML = h; el.result.hidden = false;
@@ -518,23 +524,61 @@ function renderTracks(box, sel, onPick) {
 function setSeg(id, v) { Array.prototype.forEach.call($(id).children, function (x) { x.classList.toggle('sel', x.dataset.v === String(v)); }); }
 function bindSeg(id, fn) { $(id).addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; setSeg(id, b.dataset.v); fn(b.dataset.v); }); }
 
+function pct(v) { return clamp(Math.round(v), 8, 100); }
+function carStats(i) {
+  var C = RS.CARS[i];
+  return [['السرعة', pct(50 + (C.power - 1) * 400)], ['التسارع', pct(50 + (C.acc - 1) * 400)], ['التماسك', pct(50 + (C.grip - 1) * 400)], ['النيترو', pct(50 + (C.nUp / C.nDn - 1) * 50)]];
+}
+function buildCarCards(box, getSel, onPick) {
+  var h = '';
+  RS.CARS.forEach(function (C, i) {
+    var st = carStats(i).map(function (r) { return '<div class="st"><span>' + r[0] + '</span><i style="--w:' + r[1] + '%"></i></div>'; }).join('');
+    h += '<button class="cc' + (getSel() === i ? ' sel' : '') + '" data-i="' + i + '"><b>' + CAR_INFO[i].name + '</b><small>' + CAR_INFO[i].desc + '</small>' + st + '</button>';
+  });
+  box.innerHTML = h;
+  box.onclick = function (e) { var b = e.target.closest('.cc'); if (b) onPick(+b.dataset.i); };
+}
+function buildDrvCards(box, getSel, onPick, disabled) {
+  var h = '';
+  DRIVERS.forEach(function (D, i) {
+    h += '<button class="dc' + (getSel() === i ? ' sel' : '') + (disabled && disabled(i) ? ' dis' : '') + '" data-i="' + i + '"><img alt="" src="' + driverIcon(i) + '"><b>' + D.name + '</b><small>' + D.tag + '</small></button>';
+  });
+  box.innerHTML = h;
+  box.onclick = function (e) { var b = e.target.closest('.dc'); if (!b || b.classList.contains('dis')) return; onPick(+b.dataset.i); };
+}
+var curTab = 'car';
+function setTab(t) {
+  curTab = t;
+  Array.prototype.forEach.call($('tabsS').children, function (b) { b.classList.toggle('sel', b.dataset.t === t); });
+  ['car', 'drv', 'trk', 'race'].forEach(function (k) { $('pane_' + k).hidden = k !== t; });
+  $('sSetup').scrollTop = 0;
+}
+function updateSummary() {
+  var tn = getTrackDef(cfg.track).name, s = CAR_INFO[cfg.car1].name + ' · ' + DRIVERS[cfg.d1].name + ' · ' + tn;
+  if (cfg.mode === 'local') s = CAR_INFO[cfg.car1].name + ' + ' + CAR_INFO[cfg.car2].name + ' · ' + tn;
+  $('sumLine').textContent = s;
+}
 function openSetup(mode) {
   cfg.mode = mode;
   $('setupTitle').textContent = mode === 'local' ? 'لاعبين على جهاز واحد' : 'ضد الكمبيوتر';
-  $('p2box').hidden = mode !== 'local'; $('aiBox').hidden = mode !== 'local'; $('diffBox').hidden = mode === 'local' && cfg.aiLocal === 0;
+  $('p2box').hidden = mode !== 'local'; $('p2drv').hidden = mode !== 'local'; $('aiBox').hidden = mode !== 'local'; $('diffBox').hidden = mode === 'local' && cfg.aiLocal === 0;
   $('inName2').value = cfg.n2; $('keysLocal').hidden = mode !== 'local';
-  buildSwatches($('swatches'), function () { return cfg.c1; }, function (i) { if (mode === 'local' && i === cfg.c2) return; cfg.c1 = i; openColors(); refreshPreview(); }, function (i) { return mode === 'local' && i === cfg.c2; });
-  buildSwatches($('swatches2'), function () { return cfg.c2; }, function (i) { if (i === cfg.c1) return; cfg.c2 = i; openColors(); refreshPreview(); }, function (i) { return i === cfg.c1; });
-  $('colName').textContent = PCOLOR_NAMES[cfg.c1];
-  renderTracks($('trackGrid'), cfg.track, function (id) { setTrack(id); refreshPreview(); });
+  $('who1').hidden = mode !== 'local'; $('who1d').hidden = mode !== 'local';
+  if (mode === 'local' && cfg.d1 === cfg.d2) cfg.d2 = (cfg.d1 + 1) % DRIVERS.length;
+  renderTracks($('trackGrid'), cfg.track, function (id) { setTrack(id); refreshPreview(); updateSummary(); });
   setSeg('segLaps', cfg.laps); setSeg('segDiff', cfg.diff); setSeg('segAI', cfg.aiLocal);
-  setTrack(cfg.track); showScreen('sSetup'); refreshPreview();
+  openColors(); setTrack(cfg.track); showScreen('sSetup'); setTab('car'); refreshPreview();
 }
 function openColors() {
   var mode = cfg.mode;
   buildSwatches($('swatches'), function () { return cfg.c1; }, function (i) { if (mode === 'local' && i === cfg.c2) return; cfg.c1 = i; openColors(); refreshPreview(); }, function (i) { return mode === 'local' && i === cfg.c2; });
   buildSwatches($('swatches2'), function () { return cfg.c2; }, function (i) { if (i === cfg.c1) return; cfg.c2 = i; openColors(); refreshPreview(); }, function (i) { return i === cfg.c1; });
   $('colName').textContent = PCOLOR_NAMES[cfg.c1];
+  buildCarCards($('carBox1'), function () { return cfg.car1; }, function (i) { cfg.car1 = i; openColors(); refreshPreview(); });
+  buildCarCards($('carBox2'), function () { return cfg.car2; }, function (i) { cfg.car2 = i; openColors(); refreshPreview(); });
+  buildDrvCards($('drvBox1'), function () { return cfg.d1; }, function (i) { cfg.d1 = i; openColors(); refreshPreview(); }, function (i) { return mode === 'local' && i === cfg.d2; });
+  buildDrvCards($('drvBox2'), function () { return cfg.d2; }, function (i) { cfg.d2 = i; openColors(); refreshPreview(); }, function (i) { return i === cfg.d1; });
+  updateSummary();
 }
 
 /* ---- online screens ---- */
@@ -550,11 +594,15 @@ NETUI.lobby = function () {
 function renderLobby() {
   var host = NET.role === 'host', mine = NET.players.filter(function (p) { return p.id === NET.me; })[0];
   $('roomCode').textContent = NET.code;
-  var h = ''; NET.players.forEach(function (p) { h += '<li class="' + (p.id === NET.me ? 'me' : '') + '"><i style="background:#' + ('000000' + p.color.toString(16)).slice(-6) + '"></i><span>' + p.name + '</span>' + (p.id === 'host' ? '<em>المضيف</em>' : '') + '</li>'; });
+  var h = ''; NET.players.forEach(function (p) { h += '<li class="' + (p.id === NET.me ? 'me' : '') + '"><i style="background:#' + ('000000' + p.color.toString(16)).slice(-6) + '"></i><span><img class="dic" alt="" src="' + driverIcon(p.drv | 0) + '">' + p.name + ' <small>' + CAR_INFO[p.car | 0].name + '</small></span>' + (p.id === 'host' ? '<em>المضيف</em>' : '') + '</li>'; });
   $('plist').innerHTML = h; $('pcount').textContent = NET.players.length + '/6';
   $('netNote').hidden = NET.kind !== 'bc';
   var cidx = mine ? PCOLORS.indexOf(mine.color) : cfg.c1;
   buildSwatches($('swatchesL'), function () { return cidx; }, function (i) { netSetColor(PCOLORS[i]); }, function (i) { return !colorFree(PCOLORS[i], NET.me); });
+  var mycar = mine ? mine.car | 0 : cfg.car1, mydrv = mine ? mine.drv | 0 : cfg.d1;
+  buildCarCards($('carBoxL'), function () { return mycar; }, function (i) { netSetPick(i, mydrv); });
+  buildDrvCards($('drvBoxL'), function () { return mydrv; }, function (i) { netSetPick(mycar, i); }, function (i) { return !drvFree(i, NET.me); });
+  if (mine) { cfg.car1 = mycar; cfg.d1 = mydrv; }
   $('lobbyHost').hidden = !host; $('lobbyGuest').hidden = host; $('bGo').hidden = !host; $('bGo').disabled = NET.players.length < 2;
   var def = getTrackDef(NET.track);
   if (host) { renderTracks($('trackGridL'), NET.track, function (id) { netSetTrackLaps(id, 0); }); setSeg('segLapsL', NET.laps); }
@@ -588,11 +636,12 @@ function buildMenu() {
   bindSeg('segAI', function (v) { cfg.aiLocal = +v; $('diffBox').hidden = cfg.aiLocal === 0; });
   bindSeg('segLapsL', function (v) { netSetTrackLaps(0, +v); });
   $('bStart').addEventListener('click', startRace);
-  $('bCreate').addEventListener('click', function () { $('bCreate').disabled = true; netStatus('جاري إنشاء الغرفة...', false); netCreate(cfg.n1, PCOLORS[cfg.c1]); });
+  $('tabsS').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setTab(b.dataset.t); });
+  $('bCreate').addEventListener('click', function () { $('bCreate').disabled = true; netStatus('جاري إنشاء الغرفة...', false); netCreate(cfg.n1, PCOLORS[cfg.c1], cfg.car1, cfg.d1); });
   $('bJoin').addEventListener('click', function () {
     var code = $('inCode').value.trim().toUpperCase();
     if (code.length < 4) { netStatus('اكتب رمز الغرفة', true); return; }
-    $('bJoin').disabled = true; netStatus('بندخل الغرفة...', false); netJoin(code, cfg.n1, PCOLORS[cfg.c1]);
+    $('bJoin').disabled = true; netStatus('بندخل الغرفة...', false); netJoin(code, cfg.n1, PCOLORS[cfg.c1], cfg.car1, cfg.d1);
   });
   $('inCode').addEventListener('input', function (e) { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
   $('inCode').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('bJoin').click(); });
@@ -619,6 +668,6 @@ window.addEventListener('resize', function () { applyViewOffset(); el.orient.hid
 window.__race = {
   step: function (sec) { var n = Math.round(sec / STEP); for (var i = 0; i < n; i++) raceStep(STEP); }, skipCountdown: function () { state.cd = 4.19; },
   state: state, cfg: cfg, NET: NET, get cars() { return cars; }, get humans() { return humans; }, get player() { return player; }, get T() { return T; }, KS: KS,
-  begin: beginRace, setTrack: setTrack, openSetup: openSetup, camera: camera, scene: scene, renderer: renderer, get screen() { return screen; }
+  begin: beginRace, setTrack: setTrack, openSetup: openSetup, setTab: setTab, refreshPreview: refreshPreview, get views() { return views; }, camera: camera, scene: scene, renderer: renderer, get screen() { return screen; }
 };
 requestAnimationFrame(function (t) { last = t; frame(t); });
