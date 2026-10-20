@@ -91,6 +91,45 @@ function audioUpdate(c, run) {
   var sq = (c.slip > 4 && c.speed > 12) ? Math.min(1, (c.slip - 4) / 8) * 0.22 : 0;
   AU.tire.g.gain.setTargetAtTime(sq, t, 0.05);
 }
+function introSound() {
+  if (!AU.ctx) return;
+  var c = AU.ctx, t = c.currentTime + 0.03, m = AU.master;
+  // engine rev: sawtooth sweep through a opening low-pass, with a second detuned voice
+  [1, 1.5].forEach(function (k, i) {
+    var o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+    o.type = i ? 'square' : 'sawtooth'; f.type = 'lowpass'; f.Q.value = 3;
+    o.frequency.setValueAtTime(48 * k, t); o.frequency.exponentialRampToValueAtTime(190 * k, t + 0.9); o.frequency.exponentialRampToValueAtTime(95 * k, t + 1.15); o.frequency.exponentialRampToValueAtTime(260 * k, t + 1.9);
+    f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(3200, t + 1.8);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(i ? 0.05 : 0.14, t + 0.25); g.gain.setValueAtTime(i ? 0.05 : 0.14, t + 1.6); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.3);
+    o.connect(f); f.connect(g); g.connect(m); o.start(t); o.stop(t + 2.4);
+  });
+  // whoosh: band-passed noise sweeping up
+  if (AU.noise) {
+    var s = c.createBufferSource(), bp = c.createBiquadFilter(), ng = c.createGain();
+    s.buffer = AU.noise; bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(300, t + 0.2); bp.frequency.exponentialRampToValueAtTime(4200, t + 1.6);
+    ng.gain.setValueAtTime(0.0001, t + 0.2); ng.gain.exponentialRampToValueAtTime(0.22, t + 1.3); ng.gain.exponentialRampToValueAtTime(0.0001, t + 2.1);
+    s.connect(bp); bp.connect(ng); ng.connect(m); s.start(t + 0.2); s.stop(t + 2.2);
+  }
+  // stinger: bright minor chord hit then a rising arpeggio
+  [220, 261.63, 329.63, 440].forEach(function (fr, i) {
+    var o = c.createOscillator(), g = c.createGain(), tt = t + 1.55 + i * 0.07;
+    o.type = 'triangle'; o.frequency.value = fr;
+    g.gain.setValueAtTime(0.0001, tt); g.gain.exponentialRampToValueAtTime(0.16, tt + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, tt + 1.4);
+    o.connect(g); g.connect(m); o.start(tt); o.stop(tt + 1.5);
+  });
+  [659.25, 880, 1318.5].forEach(function (fr, i) {
+    var o = c.createOscillator(), g = c.createGain(), tt = t + 1.95 + i * 0.1;
+    o.type = 'sine'; o.frequency.value = fr;
+    g.gain.setValueAtTime(0.0001, tt); g.gain.exponentialRampToValueAtTime(0.12, tt + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.9);
+    o.connect(g); g.connect(m); o.start(tt); o.stop(tt + 1);
+  });
+  // sub thump
+  var k = c.createOscillator(), kg = c.createGain();
+  k.type = 'sine'; k.frequency.setValueAtTime(110, t + 1.55); k.frequency.exponentialRampToValueAtTime(38, t + 1.9);
+  kg.gain.setValueAtTime(0.0001, t + 1.55); kg.gain.exponentialRampToValueAtTime(0.5, t + 1.57); kg.gain.exponentialRampToValueAtTime(0.0001, t + 2.0);
+  k.connect(kg); kg.connect(m); k.start(t + 1.55); k.stop(t + 2.05);
+}
 function blip(freq, dur, type, vol) {
   if (!AU.ctx) return;
   var c = AU.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime;

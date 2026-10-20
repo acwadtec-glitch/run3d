@@ -660,6 +660,19 @@ function buildMenu() {
   $('bCam').addEventListener('click', cycleCam);
 }
 
+/* ---- intro ---- */
+var introDone = false;
+function enterGame() {
+  if (introDone) return; introDone = true;
+  audioInit(); introSound();
+  setTimeout(function () { $('intro').classList.add('out'); el.menu.classList.add('enter'); }, 1250);
+  setTimeout(function () { $('intro').hidden = true; el.menu.classList.remove('enter'); }, 2300);
+}
+if (location.hash === '#nointro') { introDone = true; $('intro').hidden = true; }
+$('bIntro').addEventListener('click', enterGame);
+window.addEventListener('keydown', function (e) { if (!introDone && !e.repeat && e.code !== 'F5') { e.preventDefault(); enterGame(); } }, true);
+$('intro').addEventListener('pointerdown', function (e) { if (e.target.id !== 'bIntro') enterGame(); });
+
 /* ---- init ---- */
 setTrack(cfg.track); buildMap();
 buildMenu(); showRecord(); onResize(); refreshPreview(); applyViewOffset();
@@ -668,6 +681,6 @@ window.addEventListener('resize', function () { applyViewOffset(); el.orient.hid
 window.__race = {
   step: function (sec) { var n = Math.round(sec / STEP); for (var i = 0; i < n; i++) raceStep(STEP); }, skipCountdown: function () { state.cd = 4.19; },
   state: state, cfg: cfg, NET: NET, get cars() { return cars; }, get humans() { return humans; }, get player() { return player; }, get T() { return T; }, KS: KS,
-  begin: beginRace, setTrack: setTrack, openSetup: openSetup, setTab: setTab, refreshPreview: refreshPreview, get views() { return views; }, camera: camera, scene: scene, renderer: renderer, get screen() { return screen; }
+  begin: beginRace, setTrack: setTrack, openSetup: openSetup, setTab: setTab, refreshPreview: refreshPreview, get views() { return views; }, camera: camera, scene: scene, renderer: renderer, get screen() { return screen; }, enterGame: enterGame, get introDone() { return introDone; }
 };
 requestAnimationFrame(function (t) { last = t; frame(t); });
